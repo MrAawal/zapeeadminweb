@@ -1,0 +1,31 @@
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import LoginPage from "./screens/Login";
+import Dashboard from "./screens/Dashboard";
+import AddProduct from "./screens/AddProduct";
+import SubCategory from "./screens/SubCategory";
+import './index.css';
+
+function App() {
+  return (
+    <Router>
+      <Routes>
+        <Route path="/" element={<LoginPage />} />
+
+        
+        <Route path="/07uaAt66XG1tMh2UZZfrEV877fGUjpzjrlqYIX4FBPQoSqgB9AmlRGmx7q8gmf1tKKeqFjekK8ljKM9taYQIZswEh8H734PJ1VhKME2xYlMikUTshpbBt5uRUbU2VtHpztat97D0SdLgcaGbFqpes1Lp40rOgwyM9OSXsoA7sofamFf9XwSGZBuCHW0AIssdes9cTGcXZJFukl6mWEZa2Fx1HDI5MmiUa7fJx6XmSB2tRQQGHipKbsM2h67FXVbeJGKkTqxm9Kl5TcsFREdMaDDLPx9RxwFFJ55wdjDfROt4BsCuCHw18iCiIXCrvvz1Zc9r5Lo7a7cWsZtVTFUOkTVXojyJcsUtVXyWMLFXg73kva0QcFTQJZBmjYMqWweLowaRwdLceTfRURaiT3cWRp90sAcldKhCu7WZGHk2t0LussICVXlmKKBGYf3Mtqs9oaZYwo4sMx4D5gd0DuUHjK5kdM3spZAtdYoAsYT5EQYowk7E2KOoL1EfIvOrDyyS" element={<Dashboard />} />
+        
+<Route
+  path="/WpwbbK9Y12Sug2mW5hLg15rDYe8ZHwpsQ2EkwtBLVv3zymDsdvT0ZPdvSyG3g7ZjTsvcBFakeOICYclPULDI5fy33zv50y2HD5fFYXCMSvqJb4jxUiDLpfRHIwVvliivJtL2tcVXU213FW7lU0JzFIqM5WQpG3uOYup9u0UIZpZM69SvycpwQywr1Vi7WhY06PAYOa8DY4RkT5TP452D5BwQIxee4Q96tfQTLqRObVlvqsXROYCWWBXf3T7ResLxUhj5vxuhxvLDhwsROr8aazLdhce2OMrjWrmCrwrLPOamBLxkAhwzjWAuRaqOjmh5JdxeEfaeUHKSPVQO6HYDEdFcvC81xu2SWiZGj83qorjqSq6F9frFGIitQFcg24EBLW3jo6kqfbjI5CAaO2ybWD4o7tslfHQg04b4RaAaSlFyx8ObGsu9xufD6EzkC9yTYdvz21QIPS3koT3L0UpqKMLxYZz8pvEFvkXTmT1xrOlsrRa9cx2lLTfv2YFSoKhO"
+  element={<AddProduct />}
+/>
+        <Route path="/WpwbbK9Y12Sug2mW5hLg15rDYe8ZHwpsQ2EkwtBLVv3zymDsdvT0ZPdvSyG3g7ZjTsvcBFakeOICYclPULDI5fy33zv50y2HD5fFYXCMSvqJb4jxUiDLpfRHIwVvliivJtL2tcVXU213FW7lU0JzFIqM5WQpG3uOYup9u0UIZpZM69SvycpwQywr1Vi7WhY06PAYOa8DY4RkT5TP452D5BwQIxee4Q96tfQTLqRObVlvqsXROYCWWBXf3T7ResLxUhj5vxuhxvLDhwsROr8aazLdhce2OMrjWrmCrwrLPOamBLxkAhwzjWAuRaqOjmh5JdxeEfaeUHKSPVQO6HYDEdFcvC81xu2SWiZGj83qorjqSq6F9frFGIitQFcg24EBLW3jo6kqfbjI5CAaO2ybWD4o7tslfHQg04b4RaAaSlFyx8ObGsu9xufD6EzkC9yTYdvz21QIPS3koT3L0UpqKMLxYZz8pvEFvkXTmT1xrOlsrRa9cx2lLTfv2YFSoKhO/:productId" element={<AddProduct />} />
+        <Route path="/WpwbbK9Y12Sug2mW5hLg15rDYe8ZHwpsQ2EkwtBLVv3zymDsdvT0ZPdvSyG3g7ZjTsvcBFakeOICYclPULDI5fy33zv50y2HD5fFYXCMSvqJb4jxUiDLpfRHIwVvliivJtL2tcVXU213FW7lU0JzFIqM5WQpG3uOYup9u0UIZpZM69SvycpwQywr1Vi7WhY06PAYOa8DY4RkT5TP452D5BwQIxee4Q96tfQTLqRObVlvqsXROYCWWBXf3T7ResLxUhj5vxuhxvLDhwsROr8aazLdhce2OMrjWrmCrwrLPOamBLxkAhwzjWAuRaqOjmh5JdxeEfaeUHKSPVQO6HYDEdFcvC81xu2SWiZGj83qorjqSq6F9frFGIitQFcg24EBLW3jo6kqfbjI5CAaO2ybWD4o7tslfHQg04b4RaAaSlFyx8ObGsu9xufD6EzkC9yTYdvz21QIPS3koT3L0UpqKMLxYZz8pvEFvkXTmT1xrOlsrRa9cx2lLTfv2YFSoKhO/:id" element={<AddProduct />} />
+
+        <Route path="/ohi1YzT97EOHhw34tlHSuyusIC1Qy8LUT47kvC6Q147r2WA5KPFSei3FkIL9bwQJFlc7GYfwJOPvOeVjcA0ssSBX0txSCSiOFZcf4A7zwxVj4UAi0X7HoQjJaBZvT8bBvAmP0hCDZu82XDmtf9OUzDBtVADWfs78HsBqVy4wSpbhGBemFRykeev8yTjvaH7xts6CEVGLdOoSjik1D1YQ7x208WAeEuEyRq041raIuKsoeBHm6D79V5D1PYGUmWc8gQhVHc7eOJM2xUkVjJJ4LBA9w9yA1dI7jSwcdccF0LYFM3C6qAeCeJbHMOPzRbzplq8d4oEUTF7TOO6L5wB6wZEMJ3CRKvtGB9WHRoJaLahymkIDEWiXV1iEYAZxczjIL5b1cMibFAudvdFA3iBp3wxkLoD0RmJFt92M1TydJbv4yhMKh20C2fTAuA32X26oI28otDvUhEI7Sqvr0IYpQzuS52wm92i1o1ggkx1slxAVTr5Zf98qmYFxjsc9u5qd/:catname" element={<SubCategory />} />
+
+      </Routes>
+    </Router>
+  );
+}
+
+export default App;
