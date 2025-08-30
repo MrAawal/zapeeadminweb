@@ -8,8 +8,10 @@ import {
   addDoc,
   Timestamp,
   getFirestore,
+  query, where,
 } from "firebase/firestore";
-import { db } from "../firebase";
+import { db } from "../firebase/firebase";
+import { getAuth } from "firebase/auth";
 
 export interface Product {
   id?: string;  // Optional because Firestore auto-generates for new
@@ -34,8 +36,16 @@ export interface Product {
 
 // Fetch all products
 export async function fetchProducts(): Promise<Product[]> {
-  const productsCol = collection(db, "product");
-  const productSnapshot = await getDocs(productsCol);
+  const user = getAuth().currentUser;
+  if (!user) throw new Error("No current user found");
+
+  // Create a Firestore query filtering 'branch' field by current user's UID
+  const productsQuery = query(
+    collection(db, "product"),
+    where("branch", "==", user.uid)
+  );
+
+  const productSnapshot = await getDocs(productsQuery);
   return productSnapshot.docs.map(doc => ({
     id: doc.id,
     ...(doc.data() as Product),

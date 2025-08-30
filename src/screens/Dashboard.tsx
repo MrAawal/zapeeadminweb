@@ -1,20 +1,27 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, ChangeEvent } from "react";
 import { Picker } from '@react-native-picker/picker';
 import { useNavigate, useParams } from "react-router-dom";
 import { fetchMonthlyOrderTotals, OrderDataPoint } from '../components/Charts';
 import { getDashboardStats, DashboardStats } from "../components/analytics"; // Adjust path
 import { fetchTotalsChargesAndPrice, TotalsResult } from '../components/Charges';
 import { collection, getDocs } from "firebase/firestore";
-import { storage, db } from "../firebase"; // Adjust import paths
+import { storage, db } from "../firebase/firebase"; // Adjust import paths
 import { ref, getDownloadURL } from "firebase/storage";
+import MapView, { Marker } from 'react-native-maps';
+import { getAuth } from "firebase/auth";
+import { registerUser, getCurrentUserUid } from "../components/auth"
 
 
-const currentXoneUid = "voT4WYa4VNMQnYgFXlKVcIUeuEL2"; // Replace with actual UID
+import { fetchBannerImages, uploadBannerImage, deleteBannerImage } from '../components/banner';
+// Replace with actual UID
 const windowHeight = Dimensions.get("window").height;
 const windowWidth = Dimensions.get("window").width;
 
 
-
+interface SlideModel {
+  image: string;
+  description: string;
+}
 
 // Type for branch location
 type BranchLocation = {
@@ -33,6 +40,7 @@ type ImageDoc = {
 type FolderImages = {
   [folder: string]: string[]; // Array of image URIs
 };
+
 
 
 
@@ -74,6 +82,8 @@ import {
 } from "../components/UserModel";
 
 
+
+
 // Product APIs
 import {
   Product,
@@ -91,6 +101,7 @@ import {
   viewOrderItems,
   cancelOrderById,
   Order,
+  deliveredOrderById,
 } from "../components/OrderModel";
 
 
@@ -133,6 +144,7 @@ import {
   Branch,
   saveBranch,
 } from "../components/BranchModel"; // adjust path as needed
+import { Wheat } from "lucide-react";
 
 const statusOptions = [
   { label: "All", value: "" },
@@ -256,6 +268,10 @@ const emptyBranch: Omit<Branch, "uid" | "timestamp"> = {
 
 const AdminDashboard: React.FC = () => {
 
+  const [mapModalVisible, setMapModalVisible] = useState(false);
+  const [selectedLocation, setSelectedLocation] = useState<{ latitude: number; longitude: number; label?: string } | null>(null);
+
+
   const [activeSection, setActiveSection] = useState<string>("analytics");
   const [collapsed, setCollapsed] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
@@ -275,6 +291,10 @@ const AdminDashboard: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [totalUsers, setTotalUsers] = useState<number>(0);
   const [searchPhone, setSearchPhone] = useState<string>("");
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [uid, setUid] = useState<string | null>(null);
 
   /** Products state */
   const [products, setProducts] = useState<Product[]>([]);
@@ -340,10 +360,28 @@ const AdminDashboard: React.FC = () => {
   const [newBranch, setNewBranch] = useState(emptyBranch);
   const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
 
-  const [gallery, setGallery] = useState<FolderImages>({});
+  const [bannerUrls, setBannerUrls] = useState<string[]>([]);
+
+  const imageSize = (windowWidth - 60) / 3; //
 
 
 
+  const onRegister = async () => {
+    if (!email.trim() || !password.trim()) {
+      Alert.alert("Please enter email and password");
+      return;
+    }
+    setLoading(true);
+    const newUid = await registerUser(email, password);
+    if (newUid) {
+      setUid(newUid);
+      Alert.alert("Registration successful");
+    } else {
+      Alert.alert("Registration failed");
+      setUid(null);
+    }
+    setLoading(false);
+  };
 
 
 
@@ -857,7 +895,7 @@ const AdminDashboard: React.FC = () => {
     setLoading(true);
     setError("");
     try {
-      let fetchedOrders = await fetchOrdersByDate(currentXoneUid, date);
+      let fetchedOrders = await fetchOrdersByDate(date);
       if (statusFilter) {
         fetchedOrders = fetchedOrders.filter((order) => order.status === statusFilter);
       }
@@ -912,7 +950,7 @@ const AdminDashboard: React.FC = () => {
     setLoading(true);
     setError("");
     try {
-      const order = await searchOrderById(searchId.trim(), currentXoneUid);
+      const order = await searchOrderById(searchId.trim());
       if (order) setOrders([order]);
       else {
         setOrders([]);
@@ -987,6 +1025,23 @@ const AdminDashboard: React.FC = () => {
     setLoading(false);
   }
 
+  async function handleDeliverlOrder(orderId?: string) {
+    if (!orderId) return;
+
+    const confirmed = window.confirm("Are you sure you want to Deliver this order?");
+    if (!confirmed) return;
+
+    setLoading(true);
+    try {
+      await deliveredOrderById(orderId);
+      await loadOrdersForDate(selectedDate, filterStatus, filterDp, filterRestaurant);
+      setOrderModalVisible(false);
+      setError("");
+    } catch {
+      alert("Failed to delete subcategory");
+    }
+    setLoading(false);
+  }
 
 
   const handleLogout = () => {
@@ -1544,42 +1599,53 @@ const AdminDashboard: React.FC = () => {
 
 
   //galary
-
+  const auth = getAuth();
 
   useEffect(() => {
-    async function fetchImages() {
-      setLoading(true);
-      try {
-        const querySnapshot = await getDocs(collection(db, "gs://firelogin-1d14f.appspot.com"));
-        const folderMap: FolderImages = {};
-
-        await Promise.all(
-          querySnapshot.docs.map(async (doc) => {
-            const data = doc.data() as ImageDoc;
-            const url = await getDownloadURL(ref(storage, data.storagePath));
-            if (!folderMap[data.folder]) folderMap[data.folder] = [];
-            folderMap[data.folder].push(url);
-          })
-        );
-
-        setGallery(folderMap);
-      } catch (error) {
-        console.error("Error fetching images:", error);
-      }
-      setLoading(false);
+    if (auth.currentUser) {
+      loadBanners();
     }
+  }, [auth.currentUser]);
 
-    fetchImages();
-  }, []);
+  const loadBanners = async () => {
+    setLoading(true);
+    try {
+      const banners = await fetchBannerImages();
+      setBannerUrls(banners);
+    } catch {
+      Alert.alert("Error", "Failed to load banner images");
+    }
+    setLoading(false);
+  };
+
+  const handleDelete = async (url: string) => {
+
+    const confirmed = window.confirm("Are you sure you want to delete this Product?");
+    if (!confirmed) return;
+
+    try {
+      await deleteBannerImage(url);
+      await loadBanners();
+    } catch {
+      alert("Failed to delete subcategory");
+    }
+  };
+
+  const handleFileUpload: React.ChangeEventHandler<HTMLInputElement> = async event => {
+    if (!event.target.files || event.target.files.length === 0) return;
+    const file = event.target.files[0];
+    setLoading(true);
+    try {
+      await uploadBannerImage(file);
+      await loadBanners();
+    } catch {
+      Alert.alert("Error", "Failed to upload image");
+    }
+    setLoading(false);
+  };
 
 
-  if (loading)
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#2e7d32" />
-        <Text>Loading gallery...</Text>
-      </View>
-    );
+
 
   /** UI RENDER */
   return (
@@ -1630,7 +1696,7 @@ const AdminDashboard: React.FC = () => {
 
         {/* analycics */}
         {activeSection === "analytics" && (
-          <View>
+          <View  >
 
 
             {analyticsLoading && <ActivityIndicator size="large" color="#007bff" />}
@@ -1756,6 +1822,11 @@ const AdminDashboard: React.FC = () => {
               onChangeText={handleSearchUsers}
             />
 
+
+            {loading && <ActivityIndicator size="large" color="#0000ff" />}
+
+            {error && <Text style={styles.errorText}>{error}</Text>}
+
             <FlatList
               data={users}
               keyExtractor={(item) => item.userId}
@@ -1822,6 +1893,10 @@ const AdminDashboard: React.FC = () => {
               value={productSearch}
               onChangeText={setProductSearch}
             />
+
+            {loading && <ActivityIndicator size="large" color="#0000ff" />}
+
+            {error && <Text style={styles.errorText}>{error}</Text>}
 
             <FlatList
               data={products}
@@ -2116,6 +2191,10 @@ const AdminDashboard: React.FC = () => {
             {restaurantLoading && <ActivityIndicator size="large" color="#0000ff" />}
             {restaurantError && <Text style={styles.errorText}>{restaurantError}</Text>}
 
+            {loading && <ActivityIndicator size="large" color="#0000ff" />}
+
+            {error && <Text style={styles.errorText}>{error}</Text>}
+
             <FlatList
               data={restaurants}
               keyExtractor={(item) => item.id!}
@@ -2211,9 +2290,10 @@ const AdminDashboard: React.FC = () => {
 
         {/* ORDERS */}
         {activeSection === "orders" && (
-          <View>
+          <>
 
-            <view style={styles.statusFilterButton}>
+
+            <view style={styles.orderCard}>
               <View style={styles.totalsContainer}>
                 <Text style={styles.statusFilterButton}>{selectedDate.toDateString()}</Text>
                 <Text style={styles.statusFilterButton}>Delivery Charge: ₹{totalDeliveryCharge.toFixed(2)}</Text>
@@ -2222,87 +2302,84 @@ const AdminDashboard: React.FC = () => {
                 <Text style={styles.statusFilterButton}>Packing: ₹{totalPackingCharge.toFixed(2)}</Text>
                 <Text style={styles.statusFilterButton}>Price: ₹{totalPrice.toFixed(2)}</Text>
               </View>
+              < View style={styles.statusFilterContainer}>
+                <TouchableOpacity style={styles.navButton} onPress={goToPreviousDate}>
+                  <Text style={styles.navButtonText}>PREV</Text>
+                </TouchableOpacity>
 
+                <TextInput
+                  style={styles.statusFilterButton}
+                  placeholder="Search by Order ID"
+                  value={searchId}
+                  onChangeText={setSearchId}
+                  onSubmitEditing={handleSearchOrders}
+                  returnKeyType="search"
+                />
+
+                <TouchableOpacity style={styles.saveBtn} onPress={handleSearchOrders}>
+                  <Text style={styles.searchButtonText}>Search</Text>
+                </TouchableOpacity>
+
+                <Picker
+                  selectedValue={filterRestaurant}
+                  onValueChange={setFilterRestaurant}
+                  style={styles.statusFilterButton}
+                >
+                  <Picker.Item label="Restaurant Filter" value="" />
+                  {restaurants.map(d => (
+                    <Picker.Item label={d.storename} value={d.id} key={d.id} />
+                  ))}
+                </Picker>
+
+
+                <Picker
+                  selectedValue={filterDp}
+                  onValueChange={setFilterDp}
+                  style={styles.statusFilterButton}
+                >
+                  <Picker.Item label="Partner Filter" value="" />
+                  {partners.map(d => (
+                    <Picker.Item label={d.storename} value={d.pincode} key={d.pincode} />
+                  ))}
+                </Picker>
+
+                {statusOptions.map(({ label, value }) => (
+                  <TouchableOpacity
+                    key={value}
+                    onPress={() => setFilterStatus(value)}
+                    style={[
+                      styles.statusFilterButton,
+                      filterStatus === value && styles.statusFilterButtonActive,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.statusFilterText,
+                        filterStatus === value && styles.statusFilterTextActive,
+                      ]}
+                    >
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+
+
+                <TouchableOpacity style={styles.navButton} onPress={goToNextDate}>
+                  <Text style={styles.navButtonText}>Next</Text>
+                </TouchableOpacity>
+
+              </View>
             </view>
 
 
-            <View style={styles.navigation}>
+            {/* <View style={styles.navigation}>
 
 
 
 
-            </View>
+            </View> */}
 
 
-
-
-            <View style={styles.statusFilterContainer}>
-              <TouchableOpacity style={styles.navButton} onPress={goToPreviousDate}>
-                <Text style={styles.navButtonText}>PREV</Text>
-              </TouchableOpacity>
-
-              <TextInput
-                style={styles.statusFilterButton}
-                placeholder="Search by Order ID"
-                value={searchId}
-                onChangeText={setSearchId}
-                onSubmitEditing={handleSearchOrders}
-                returnKeyType="search"
-              />
-
-              <TouchableOpacity style={styles.saveBtn} onPress={handleSearchOrders}>
-                <Text style={styles.searchButtonText}>Search</Text>
-              </TouchableOpacity>
-
-              <Picker
-                selectedValue={filterRestaurant}
-                onValueChange={setFilterRestaurant}
-                style={styles.statusFilterButton}
-              >
-                <Picker.Item label="Restaurant Filter" value="" />
-                {restaurants.map(d => (
-                  <Picker.Item label={d.storename} value={d.id} key={d.id} />
-                ))}
-              </Picker>
-
-
-              <Picker
-                selectedValue={filterDp}
-                onValueChange={setFilterDp}
-                style={styles.statusFilterButton}
-              >
-                <Picker.Item label="Partner Filter" value="" />
-                {partners.map(d => (
-                  <Picker.Item label={d.storename} value={d.pincode} key={d.pincode} />
-                ))}
-              </Picker>
-
-              {statusOptions.map(({ label, value }) => (
-                <TouchableOpacity
-                  key={value}
-                  onPress={() => setFilterStatus(value)}
-                  style={[
-                    styles.statusFilterButton,
-                    filterStatus === value && styles.statusFilterButtonActive,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.statusFilterText,
-                      filterStatus === value && styles.statusFilterTextActive,
-                    ]}
-                  >
-                    {label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-
-
-              <TouchableOpacity style={styles.navButton} onPress={goToNextDate}>
-                <Text style={styles.navButtonText}>Next</Text>
-              </TouchableOpacity>
-
-            </View>
 
 
 
@@ -2312,15 +2389,16 @@ const AdminDashboard: React.FC = () => {
 
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-            <FlatList
-              data={orders}
+            <FlatList data={orders}
               keyExtractor={(item) => item.id || Math.random().toString()}
               contentContainerStyle={{ paddingBottom: 20 }}
               renderItem={({ item }) => (
                 <View style={styles.orderCard}>
+                  {/* First line: Order Number and Status */}
                   <Text style={styles.orderNumber}>Order #{item.orderNumber} ({item.status})</Text>
 
-                  <View style={styles.orderFieldsContainer}>
+                  {/* Second line: Key fields split into multiple columns */}
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginVertical: 8 }}>
                     {[
                       ["Pick-up Store", item.customerStore],
                       ["Customer Name", item.customerName],
@@ -2330,37 +2408,83 @@ const AdminDashboard: React.FC = () => {
                       ["Address", item.customerAddress],
                       ["Total Price", `₹${item.totalPrice}`],
                       ["Delivery Charge", `₹${item.deliveryCharge}`],
-                      ["Date", item.orderPlaceDate?.toDate().toLocaleString()],
+                      // ["Date", item.orderPlaceDate?.toDate().toLocaleString()],
                     ].map(([label, value]) => (
-                      <View key={label as string} style={styles.orderFieldRow}>
-                        <Text style={styles.orderFieldLabel}>{label}:</Text>
-                        <Text
-                          style={styles.orderFieldValue}
-                          numberOfLines={2}
-                          ellipsizeMode="tail"
-                        >
+                      <View key={label as string} style={{ width: '48%', marginVertical: 4, flexDirection: 'row' }}>
+                        <Text style={styles.orderFieldLabel}>{label}: </Text>
+                        <Text style={styles.orderFieldValue} numberOfLines={1} ellipsizeMode="tail">
                           {String(value)}
                         </Text>
                       </View>
                     ))}
                   </View>
 
-                  <View style={{ flexDirection: "row", marginTop: 10 }}>
-                    <TouchableOpacity
-                      style={styles.viewItemsButton}
-                      onPress={() => openOrderItemsModal(item.id)}
-                    >
+                  {/* Third line: Action buttons in a row */}
+                  <View style={{ flexDirection: "row", marginTop: 10, justifyContent: 'space-around' }}>
+                    <TouchableOpacity style={styles.viewItemsButton} onPress={() => openOrderItemsModal(item.id)}>
                       <Text style={styles.viewItemsButtonText}>View Items</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.cancelButton}
-                      onPress={() => handleCancelOrder(item.id)}
-                    >
+                    <TouchableOpacity style={styles.cancelButton} onPress={() => handleCancelOrder(item.id)}>
                       <Text style={styles.cancelButtonText}>Cancel Order</Text>
                     </TouchableOpacity>
+                    <TouchableOpacity style={styles.viewItemsButton} onPress={() => handleDeliverlOrder(item.id)}>
+                      <Text style={styles.cancelButtonText}>Delivered Order</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.viewItemsButton}
+                      onPress={() => {
+                        if (item.customerAddress && item.storeLat && item.storeLon) {
+                          setSelectedLocation({
+                            latitude: Number(item.storeLat) || 0,
+                            longitude: Number(item.storeLon) || 0,
+                            label: item.customerStore || item.customerAddress,
+                          });
+                          setMapModalVisible(true);
+                        } else {
+                          alert("Location data not available for this order");
+                        }
+                      }}
+                    >
+                      <Text style={styles.cancelButtonText}>Map</Text>
+                    </TouchableOpacity>
+
+
+                    {/* // Add this JSX inside AdminDashboard's return, ideally near modals */}
+                    {/* <Modal
+                      visible={mapModalVisible}
+                      transparent={true}
+                      animationType="slide"
+                      onRequestClose={() => setMapModalVisible(false)}
+                    >
+                      <View style={styles.modalBackground}>
+                        <View style={styles.modalContent}>
+                          <Text style={styles.modalTitle}>Map View</Text>
+                          {selectedLocation && (
+                            <MapView
+                              style={{ flex: 1, borderRadius: 10 }}
+                              initialRegion={{
+                                latitude: selectedLocation.latitude,
+                                longitude: selectedLocation.longitude,
+                                latitudeDelta: 0.01,
+                                longitudeDelta: 0.01,
+                              }}
+                            >
+                              <Marker
+                                coordinate={{ latitude: selectedLocation.latitude, longitude: selectedLocation.longitude }}
+                                title={selectedLocation.label || 'Location'}
+                              />
+                            </MapView>
+                          )}
+                          <TouchableOpacity style={styles.closeButton} onPress={() => setMapModalVisible(false)}>
+                            <Text style={styles.closeButtonText}>Close</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </Modal>
+ */}
+
                   </View>
-                </View>
-              )}
+                </View>)}
             />
 
             {/* Modal popup order items grid */}
@@ -2389,7 +2513,10 @@ const AdminDashboard: React.FC = () => {
                 </View>
               </View>
             </Modal>
-          </View>
+
+
+
+          </>
         )}
 
         {/* PARTNER */}
@@ -2557,60 +2684,60 @@ const AdminDashboard: React.FC = () => {
 
 
 
-            {loading ? (
-              <ActivityIndicator size="large" color="#007bff" />
-            ) : (
-              <FlatList
-                data={categories}
-                keyExtractor={item => item.id!}
-                renderItem={({ item }) => (
+            {loading && <ActivityIndicator size="large" color="#0000ff" />}
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+            <FlatList
+              data={categories}
+              keyExtractor={item => item.id!}
+              renderItem={({ item }) => (
 
 
-                  <View style={styles.restaurantItem} >
+                <View style={styles.restaurantItem} >
 
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.title}>{item.tittle}</Text>
-                      <Text>Tag: {item.tag}</Text>
-                      <Text>
-                        Branches: {(item.branchId && Array.isArray(item.branchId)) ? item.branchId.join(", ") : ""}
-                      </Text>
-                      <Text>Show: {item.show ? "Yes" : "No"}</Text>
-                    </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.title}>{item.tittle}</Text>
+                    <Text>Tag: {item.tag}</Text>
+                    <Text>
+                      Branches: {(item.branchId && Array.isArray(item.branchId)) ? item.branchId.join(", ") : ""}
+                    </Text>
+                    <Text>Show: {item.show ? "Yes" : "No"}</Text>
+                  </View>
 
-                    <View style={styles.actions}>
+                  <View style={styles.actions}>
 
 
 
-                      <TouchableOpacity
-                        style={styles.editBtn}
-                        onPress={() => navigate(`/ohi1YzT97EOHhw34tlHSuyusIC1Qy8LUT47kvC6Q147r2WA5KPFSei3FkIL9bwQJFlc7GYfwJOPvOeVjcA0ssSBX0txSCSiOFZcf4A7zwxVj4UAi0X7HoQjJaBZvT8bBvAmP0hCDZu82XDmtf9OUzDBtVADWfs78HsBqVy4wSpbhGBemFRykeev8yTjvaH7xts6CEVGLdOoSjik1D1YQ7x208WAeEuEyRq041raIuKsoeBHm6D79V5D1PYGUmWc8gQhVHc7eOJM2xUkVjJJ4LBA9w9yA1dI7jSwcdccF0LYFM3C6qAeCeJbHMOPzRbzplq8d4oEUTF7TOO6L5wB6wZEMJ3CRKvtGB9WHRoJaLahymkIDEWiXV1iEYAZxczjIL5b1cMibFAudvdFA3iBp3wxkLoD0RmJFt92M1TydJbv4yhMKh20C2fTAuA32X26oI28otDvUhEI7Sqvr0IYpQzuS52wm92i1o1ggkx1slxAVTr5Zf98qmYFxjsc9u5qd/${item.id}`)}
-                      >
-                        <Text style={styles.addButtonText}>SubCategory</Text>
-                      </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.editBtn}
+                      onPress={() => navigate(`/ohi1YzT97EOHhw34tlHSuyusIC1Qy8LUT47kvC6Q147r2WA5KPFSei3FkIL9bwQJFlc7GYfwJOPvOeVjcA0ssSBX0txSCSiOFZcf4A7zwxVj4UAi0X7HoQjJaBZvT8bBvAmP0hCDZu82XDmtf9OUzDBtVADWfs78HsBqVy4wSpbhGBemFRykeev8yTjvaH7xts6CEVGLdOoSjik1D1YQ7x208WAeEuEyRq041raIuKsoeBHm6D79V5D1PYGUmWc8gQhVHc7eOJM2xUkVjJJ4LBA9w9yA1dI7jSwcdccF0LYFM3C6qAeCeJbHMOPzRbzplq8d4oEUTF7TOO6L5wB6wZEMJ3CRKvtGB9WHRoJaLahymkIDEWiXV1iEYAZxczjIL5b1cMibFAudvdFA3iBp3wxkLoD0RmJFt92M1TydJbv4yhMKh20C2fTAuA32X26oI28otDvUhEI7Sqvr0IYpQzuS52wm92i1o1ggkx1slxAVTr5Zf98qmYFxjsc9u5qd/${item.id}`)}
+                    >
+                      <Text style={styles.addButtonText}>SubCategory</Text>
+                    </TouchableOpacity>
 
-                      <TouchableOpacity style={styles.editBtn} onPress={() => openEditModal(item)}>
-                        <Text style={styles.actionText}>Edit</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity style={styles.deleteBtn} onPress={() => deleteItem(item.id)}>
-                        <Text style={styles.actionText}>Delete</Text>
-                      </TouchableOpacity>
+                    <TouchableOpacity style={styles.editBtn} onPress={() => openEditModal(item)}>
+                      <Text style={styles.actionText}>Edit</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.deleteBtn} onPress={() => deleteItem(item.id)}>
+                      <Text style={styles.actionText}>Delete</Text>
+                    </TouchableOpacity>
 
-                      {/* <TouchableOpacity   style={styles.editBtn}    onPress={() => navigate("./SubcategoryScreen", { cate })}                          >
+                    {/* <TouchableOpacity   style={styles.editBtn}    onPress={() => navigate("./SubcategoryScreen", { cate })}                          >
                         <Text style={styles.actionText}>SubCategory</Text>
                        </TouchableOpacity> */}
 
-                    </View>
                   </View>
+                </View>
 
 
 
-                )}
+              )}
 
 
-                contentContainerStyle={{ paddingBottom: 100 }}
-                ListEmptyComponent={<Text style={styles.restaurantItem}>No categories found.</Text>}
-              />
-            )}
+              contentContainerStyle={{ paddingBottom: 100 }}
+              ListEmptyComponent={<Text style={styles.restaurantItem}>No categories found.</Text>}
+            />
+
 
             <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => setModalVisible(false)}>
               <View style={styles.modalBackground}>
@@ -2687,6 +2814,40 @@ const AdminDashboard: React.FC = () => {
             <TouchableOpacity style={styles.addButton} onPress={() => setAddModalVisible(true)}>
               <Text style={styles.addButtonText}>Add New</Text>
             </TouchableOpacity>
+          </View>
+
+          <View style={styles.headerRow}>
+            <Text style={styles.title}>Register Branch</Text>
+
+            <TextInput
+              placeholder="Email"
+              style={styles.input}
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              editable={!loading}
+            />
+
+            <TextInput
+              placeholder="Password"
+              style={styles.input}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              editable={!loading}
+            />
+
+            <TouchableOpacity style={styles.addButton} onPress={onRegister} disabled={loading}>
+              <Text style={styles.addButtonText}>{loading ? "Registering..." : "Register"}</Text>
+            </TouchableOpacity>
+
+            {uid && (
+              <View style={styles.headerRow}>
+                <Text style={styles.label}>Registered Branch Id:</Text>
+                <Text style={styles.label}>{uid}</Text>
+              </View>
+            )}
           </View>
 
 
@@ -2810,25 +2971,91 @@ const AdminDashboard: React.FC = () => {
         </>)}
 
         {activeSection === 'galary' && (<>
-          <ScrollView style={styles.container}>
+          < View></View>
+          <View style={{ flex: 1, padding: 15, backgroundColor: "#fff" }}>
+            <Text style={{ fontSize: 26, fontWeight: "bold", marginBottom: 15, textAlign: "center" }}>
+              Branch Banner Images
+            </Text>
 
-            <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#2e7d32" />
-            <Text>Galery under developement</Text>
-            </View>
+            {loading && <Text style={{ textAlign: "center", marginBottom: 10 }}>Loading...</Text>}
 
-           
-            {Object.entries(gallery).map(([folder, urls]) => (
-              <View key={folder} style={styles.folderSection}>
-                <Text style={styles.folderTitle}>{folder.toUpperCase()}</Text>
-                <View style={styles.imageGrid}>
-                  {urls.map((uri, idx) => (
-                    <Image key={idx} source={{ uri }} style={styles.imageItem} />
-                  ))}
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleFileUpload}
+              style={{
+                display: "block",
+                width: "100%",
+                padding: 12,
+                borderRadius: 8,
+                border: "2px dashed #007bff",
+                backgroundColor: "#e6f0ff",
+                color: "#007bff",
+                fontWeight: "bold",
+                fontSize: 16,
+                cursor: "pointer",
+                textAlign: "center",
+                boxSizing: "border-box",
+                marginBottom: 20,
+              }}
+            />
+
+            <FlatList
+              data={bannerUrls}
+              keyExtractor={(item) => item}
+              // numColumns={3}
+              horizontal
+              showsVerticalScrollIndicator={false}
+              renderItem={({ item }) => (
+                <View
+                  style={{
+                    width: imageSize,
+                    marginBottom: 20,
+                    marginRight: 10,
+                    borderRadius: 12,
+                    overflow: "hidden",
+                    backgroundColor: "#f0f8ff",
+                    elevation: 5, // Android shadow
+                    shadowColor: "#007bff",
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.35,
+                    shadowRadius: 5,
+                    position: "relative",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    padding: 5,
+                  }}
+                >
+                  <Image
+                    source={{ uri: item }}
+                    style={{ width: imageSize - 10, height: imageSize - 10, borderRadius: 10 }}
+                    resizeMode="cover"
+                  />
+                  <TouchableOpacity
+                    onPress={() => handleDelete(item)}
+                    style={{
+                      position: "absolute",
+                      bottom: 10,
+                      left: 10,
+                      right: 10,
+                      backgroundColor: "#007bff",
+                      paddingVertical: 6,
+                      borderRadius: 20,
+                      alignItems: "center",
+                    }}
+                  >
+                    <Text style={{ color: "#fff", fontWeight: "bold", fontSize: 14 }}>Delete Image</Text>
+                  </TouchableOpacity>
                 </View>
-              </View>
-            ))}
-          </ScrollView>
+              )}
+            />
+
+            {bannerUrls.length === 0 && !loading && (
+              <Text style={{ textAlign: "center", fontStyle: "italic", color: "#888" }}>
+                No images found.
+              </Text>
+            )}
+          </View>
 
 
 
@@ -3167,7 +3394,7 @@ const styles = StyleSheet.create({
     margin: 6,
     borderRadius: 8,
     padding: 10,
-    maxWidth: "50%",
+    // maxWidth: "50%",
   },
   productImage: {
     width: "95%",
@@ -3325,6 +3552,49 @@ const styles = StyleSheet.create({
     aspectRatio: 1,
     borderRadius: 8,
     marginBottom: 12,
+  },
+  fileInput: {
+    width: '100%',
+    marginBottom: 15,
+  },
+  imageWrapper: {
+    marginRight: 15,
+    borderRadius: 12,
+    overflow: 'hidden',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    position: 'relative',
+  },
+  image: {
+    width: windowWidth * 0.3,       // 30% of screen width as requested
+    height: windowWidth * 0.3 * 0.75,  // maintain 4:3 aspect ratio approx
+    borderRadius: 15,               // rounded corners
+    borderWidth: 2,                 // decorative border
+    borderColor: "#007bff",         // blue border
+    marginHorizontal: 10,
+    backgroundColor: "#f0f8ff",    // light blue background for placeholder
+    shadowColor: "#007bff",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 5,
+    elevation: 5,
+    margin: 20,                // Android shadow
+  },
+
+
+  deleteText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 20,
+    lineHeight: 20,
+  },
+  noImageText: {
+    textAlign: 'center',
+    fontStyle: 'italic',
+    marginTop: 20,
   },
 
 });

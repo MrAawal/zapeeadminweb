@@ -16,7 +16,7 @@ import {
 import { Picker } from '@react-native-picker/picker';
 import { useParams } from 'react-router-dom';
 import { doc, getDoc, updateDoc, collection, addDoc } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db } from '../firebase/firebase';
 import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import {
   fetchCategories,

@@ -9,7 +9,8 @@ import {
   deleteDoc,
   Timestamp,
 } from "firebase/firestore";
-import { db } from "../firebase";
+import { db } from "../firebase/firebase";
+import { getAuth } from "firebase/auth";
 
 export interface ProductCategory {
   id?: string;
@@ -23,7 +24,7 @@ export interface ProductCategory {
 }
 
 const CATEGORY_COLLECTION = "category";
-const BranchId = "voT4WYa4VNMQnYgFXlKVcIUeuEL2";
+const BranchId =  "voT4WYa4VNMQnYgFXlKVcIUeuEL2";
 
 export async function fetchCategories(): Promise<ProductCategory[]> {
   // Create a query on the collection with 'array-contains' filter on 'branchId'

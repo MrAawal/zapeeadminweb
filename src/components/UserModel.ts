@@ -1,6 +1,6 @@
 // UserModel.ts
 import { collection, getDocs, doc, updateDoc, deleteDoc, Timestamp } from "firebase/firestore";
-import { db } from "../firebase";
+import { db } from "../firebase/firebase";
 
 export interface User {
   userId: string;
@@ -43,3 +43,19 @@ export async function deleteUser(userId: string): Promise<void> {
   const userRef = doc(db, "users", userId);
   await deleteDoc(userRef);
 }
+
+import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
+
+const auth = getAuth();
+
+async function registerUser(email: string, password: string) {
+  try {
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    const user = userCredential.user;
+    console.log("User registered:", user.uid);
+    // Optionally save user profile data to Firestore
+  } catch (error) {
+    console.error("Registration error:", error);
+  }
+}
+

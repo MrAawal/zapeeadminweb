@@ -1,6 +1,6 @@
 import React, { useEffect, useState, ChangeEvent } from "react";
 import { collection, getDocs, Timestamp } from "firebase/firestore";
-import { db } from "./firebase";
+import { db } from "./firebase/firebase";
 import { useNavigate } from "react-router-dom";
 
 // type Product = {

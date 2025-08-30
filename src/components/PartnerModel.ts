@@ -7,9 +7,12 @@ import {
   updateDoc,
   doc,
   deleteDoc,
-  Timestamp
+  Timestamp,
+  
+  
 } from "firebase/firestore";
-import { db } from "../firebase";
+import { getAuth } from "firebase/auth";
+import { db } from "../firebase/firebase";
 
 export interface Partner {
   id?: string;
@@ -28,13 +31,23 @@ export interface Partner {
 const PARTNER_COLLECTION = "deliveryPartner";
 
 export async function fetchPartners(): Promise<Partner[]> {
-  const colRef = collection(db, PARTNER_COLLECTION);
+    const user = getAuth().currentUser;
+
+  // Query partners where 'storeid' matches and 'active' is true
+  const colRef = query(
+    collection(db, PARTNER_COLLECTION),
+    where("storeid", "==", user?.uid),
+    where("active", "==", true),
+  );
+
   const snapshot = await getDocs(colRef);
+
   return snapshot.docs.map(doc => ({
     id: doc.id,
-    ...(doc.data() as Partner)
+    ...(doc.data() as Partner),
   }));
 }
+
 
 export async function addPartner(data: Omit<Partner, "id" | "createdTimestamp">): Promise<void> {
   const colRef = collection(db, PARTNER_COLLECTION);

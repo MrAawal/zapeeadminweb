@@ -9,7 +9,8 @@ import {
   getDoc,
   updateDoc,
 } from "firebase/firestore";
-import { db } from "../firebase";
+import { db } from "../firebase/firebase";
+import { getAuth } from "firebase/auth";
 
 export interface Order {
   id?: string;
@@ -41,9 +42,10 @@ export interface Order {
 }
 
 // Fetch orders filtered by date and xone UID, ordered descending by orderPlaceDate
-export async function fetchOrdersByDate(xoneUid: string, date: Date): Promise<Order[]> {
+export async function fetchOrdersByDate( date: Date): Promise<Order[]> {
   const ordersCol = collection(db, "orders");
-
+  const xoneUid = getAuth().currentUser;
+  
   // Get date range for selected day
   const start = new Date(date.getFullYear(), date.getMonth(), date.getDate());
   const end = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
@@ -53,7 +55,7 @@ export async function fetchOrdersByDate(xoneUid: string, date: Date): Promise<Or
 
   const q = query(
     ordersCol,
-    where("xone", "==", xoneUid),
+    where("xone", "==", xoneUid?.uid),
     where("orderPlaceDate", ">=", startTimestamp),
     where("orderPlaceDate", "<", endTimestamp),
     orderBy("orderPlaceDate", "desc")
@@ -67,13 +69,14 @@ export async function fetchOrdersByDate(xoneUid: string, date: Date): Promise<Or
 }
 
 // Search order by ID and xone UID
-export async function searchOrderById(orderId: string, xoneUid: string): Promise<Order | null> {
+export async function searchOrderById(orderId: string): Promise<Order | null> {
   try {
+    const xoneUid = getAuth().currentUser;
     const orderDoc = doc(db, "orders", orderId);
     const orderSnap = await getDoc(orderDoc);
     if (!orderSnap.exists()) return null;
     const orderData = orderSnap.data() as Order;
-    if (orderData.xone !== xoneUid) return null;
+    if (orderData.xone !== xoneUid?.uid) return null;
     return { id: orderSnap.id, ...orderData };
   } catch {
     return null;
@@ -96,4 +99,10 @@ export async function cancelOrderById(orderId: string): Promise<void> {
   if (!orderId) throw new Error("Order ID is required");
   const orderRef = doc(db, "orders", orderId);
   await updateDoc(orderRef, { status: "Cancelled" });
+}
+
+export async function deliveredOrderById(orderId: string): Promise<void> {
+  if (!orderId) throw new Error("Order ID is required");
+  const orderRef = doc(db, "orders", orderId);
+  await updateDoc(orderRef, { status: "Delivered" });
 }

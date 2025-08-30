@@ -14,7 +14,7 @@ import {
   Switch,
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
-import { auth, db, storage } from './firebase';
+import { auth, db, storage } from './firebase/firebase';
 import {
   collection,
   query,

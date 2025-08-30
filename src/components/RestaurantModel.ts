@@ -10,7 +10,7 @@ import {
   Timestamp,
   setDoc,
 } from "firebase/firestore";
-import { db } from "../firebase";
+import { db } from "../firebase/firebase";
 import { getAuth } from "firebase/auth";
 
 export interface Restaurant {
@@ -67,14 +67,12 @@ if (currentUser) {
 }
 
 
-const BranchId = "voT4WYa4VNMQnYgFXlKVcIUeuEL2";
+
 
 export async function fetchRestaurants(): Promise<Restaurant[]> {
+  const user = getAuth().currentUser;
   const colRef = collection(db, RESTAURANT_COLLECTION);
-
-
-
-  const catQuery = query(colRef, where("branchId", "==", BranchId));
+  const catQuery = query(colRef, where("branchId", "==", user?.uid));
 
   const snapshot = await getDocs(catQuery);
 
@@ -105,6 +103,7 @@ export async function searchRestaurants(queryText: string): Promise<Restaurant[]
     (r.id && r.id === queryText)
   );
 }
+
 
 export async function toggleRestaurantActive(id: string, active: boolean): Promise<void> {
   const docRef = doc(db, RESTAURANT_COLLECTION, id);
